@@ -59,7 +59,7 @@ def attempt_to_download_lyrics_from_songs(songs):
         try:
             lyrics_content, trans_lyrics_content = download_lyrics(song['id'])
             if lyrics_content:
-                # 计算歌词的行数
+                # calculate lyrics line number
                 lines = lyrics_content.count('\n') + 1
                 if lines > 5:
                     print(f"Lyrics with more than 5 lines found for song with id {song['id']}")
