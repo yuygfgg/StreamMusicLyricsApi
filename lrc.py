@@ -59,7 +59,7 @@ def attempt_to_download_lyrics_from_songs(songs):
         try:
             lyrics_content, trans_lyrics_content = download_lyrics(song['id'])
             if lyrics_content:
-                # calculate lyrics line number
+                # 计算歌词的行数
                 lines = lyrics_content.count('\n') + 1
                 if lines > 5:
                     print(f"Lyrics with more than 5 lines found for song with id {song['id']}")
@@ -75,10 +75,37 @@ def attempt_to_download_lyrics_from_songs(songs):
     print("No suitable lyrics found for any songs in the list.")
     return None, None
 
-def get_aligned_lyrics(title, artist, album, duration):
+def get_aligned_lyrics_with_artist(title, artist, album, duration):
+    keyword = f"{artist} - {title}"
+    search_result = search_song(keyword)
+    print(keyword)
+    if not search_result:
+        return None
+    
+    songs = search_result.get('songs', [])
+    songs = [song for song in songs if abs(song['duration'] / 1000 - duration) <= 3]
+    
+    if not songs:
+        return None
+    
+    lyrics_content, trans_lyrics_content = attempt_to_download_lyrics_from_songs(songs)
+    
+    if lyrics_content:
+        lrc_dict, unformatted_lines = parse_lyrics(lyrics_content)
+        if len(lrc_dict) < 5:  # Check if there are less than 5 formatted lines
+            return None
+        tlyric_dict, _ = parse_lyrics(trans_lyrics_content if trans_lyrics_content else '')
+        merged = merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines)
+        print("merged")
+        print(merged)
+        return merged
+    else:
+        return None
+
+def get_aligned_lyrics_with_album(title, artist, album, duration):
     keyword = f"{album} - {title}"
     search_result = search_song(keyword)
-    
+    print(keyword)
     if not search_result:
         return None
     
@@ -113,11 +140,16 @@ def lyrics():
         response = "Title and artist are required"
         return Response(response, status=400, mimetype='text/plain')
     
-    aligned_lyrics = get_aligned_lyrics(title, artist, album, duration)
+    aligned_lyrics = get_aligned_lyrics_with_artist(title, artist, album, duration) # first search with {artist} - {track} for accuracy
+    if not aligned_lyrics:
+        print("search with artist fail!!")
+        print("fall back to album!!!")
+        aligned_lyrics = get_aligned_lyrics_with_album(title, artist, album, duration) # sometimes artist name may vary, try album name 
     
     if aligned_lyrics:
         return Response(aligned_lyrics, mimetype='text/plain')
     else:
+        print("all attempt fail...")
         response = "No lyrics found"
         return Response(response, status=404, mimetype='text/plain')
 
