@@ -4,6 +4,7 @@ Stream music lyrics api from Netease Music.
 I wrote this script since the lyrics api doesn't support translation.
 
 # usage
+1. change '/path/to/lrcs' in lrc.py to your .lrc file path
 1. run the python script
 2. set lyrics api in Stream music ```http://localhost:51232/lyrics```
 
