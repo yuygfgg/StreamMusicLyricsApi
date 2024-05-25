@@ -74,7 +74,7 @@ def merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines):
     return '\n'.join(merged_lyrics)
 
 def check_local_lyrics(title):
-    lrc_directory = "/Volumes/yuygfgg/media/音声/lrcs"
+    lrc_directory = "/path/to/lrcs"
     for file in os.listdir(lrc_directory):
         if file.startswith(title) and file.endswith('.lrc'):
             with open(os.path.join(lrc_directory, file), 'r', encoding='utf-8') as f:
