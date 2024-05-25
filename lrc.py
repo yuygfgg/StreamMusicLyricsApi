@@ -1,4 +1,4 @@
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 import requests
 import re
 import os
@@ -31,12 +31,11 @@ def attempt_to_download_lyrics_from_songs(songs):
         try:
             lyrics_content, trans_lyrics_content = download_lyrics(song['id'])
             if lyrics_content:
-                # 计算歌词的行数
                 lines = lyrics_content.count('\n') + 1
                 if lines > 5:
                     print(f"Lyrics with more than 5 lines found for song with id {song['id']}")
                     print(lyrics_content)
-                    return lyrics_content, trans_lyrics_content
+                    return lyrics_content, trans_lyrics_content 
                 else:
                     print(f"Lyrics found for song with id {song['id']} but less than 6 lines")
             else:
@@ -69,100 +68,76 @@ def merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines):
     for time_stamp in all_time_stamps:
         original_line = lrc_dict.get(time_stamp, '')
         translated_line = tlyric_dict.get(time_stamp, '')
-        merged_lyrics.append(f"{time_stamp} {original_line}")
+        merged_lyrics.append(f"{time_stamp}{original_line}")
         if translated_line:
-            merged_lyrics.append(f"{time_stamp} {translated_line}")
+            merged_lyrics.append(f"{time_stamp}{translated_line}")
     return '\n'.join(merged_lyrics)
 
 def check_local_lyrics(title):
-    lrc_directory = "/path/to/lrcs"
+    lrc_directory = "/Volumes/yuygfgg/media/音声/lrcs"
     for file in os.listdir(lrc_directory):
         if file.startswith(title) and file.endswith('.lrc'):
             with open(os.path.join(lrc_directory, file), 'r', encoding='utf-8') as f:
                 return f.read()
     return None
-def get_aligned_lyrics_with_artist(title, artist, album, duration):
-    keyword = f"{artist} - {title}"
-    search_result = search_song(keyword)
-    print(keyword)
-    if not search_result:
-        return None
-    
-    songs = search_result.get('songs', [])
-    songs = [song for song in songs if abs(song['duration'] / 1000 - duration) <= 3]
-    
-    if not songs:
-        return None
-    
-    lyrics_content, trans_lyrics_content = attempt_to_download_lyrics_from_songs(songs)
-    
-    if lyrics_content:
-        lrc_dict, unformatted_lines = parse_lyrics(lyrics_content)
-        if len(lrc_dict) < 5:  # Check if there are less than 5 formatted lines
-            return None
-        tlyric_dict, _ = parse_lyrics(trans_lyrics_content if trans_lyrics_content else '')
-        merged = merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines)
-        print("merged")
-        print(merged)
-        return merged
-    else:
-        return None
 
-def get_aligned_lyrics_with_album(title, artist, album, duration):
-    keyword = f"{album} - {title}"
-    search_result = search_song(keyword)
-    print(keyword)
-    if not search_result:
-        return None
-    
-    songs = search_result.get('songs', [])
-    songs = [song for song in songs if abs(song['duration'] / 1000 - duration) <= 3]
-    
-    if not songs:
-        return None
-    
-    lyrics_content, trans_lyrics_content = attempt_to_download_lyrics_from_songs(songs)
-    
-    if lyrics_content:
-        lrc_dict, unformatted_lines = parse_lyrics(lyrics_content)
-        if len(lrc_dict) < 5:  # Check if there are less than 5 formatted lines
-            return None
-        tlyric_dict, _ = parse_lyrics(trans_lyrics_content if trans_lyrics_content else '')
-        merged = merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines)
-        print("merged")
-        print(merged)
-        return merged
-    else:
-        return None
+def get_aligned_lyrics(title, artist, album, duration):
+    search_keywords = [
+        f"{artist} - {album} - {title}",
+        f"{album} - {title}",
+        f"{artist} - {title}"
+    ]
 
+    results = []
+
+    for keyword in search_keywords:
+        search_result = search_song(keyword)
+        if not search_result:
+            continue
+
+        songs = search_result.get('songs', [])
+        songs = [song for song in songs if abs(song['duration'] / 1000 - duration) <= 3]
+
+        for song in songs[:3]:
+            lyrics_content, trans_lyrics_content = download_lyrics(song['id'])
+
+            if lyrics_content:
+                lrc_dict, unformatted_lines = parse_lyrics(lyrics_content)
+                if len(lrc_dict) >= 5:
+                    tlyric_dict, _ = parse_lyrics(trans_lyrics_content if trans_lyrics_content else '')
+                    merged = merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines)
+                    results.append({
+                        "id": str(song['id']),
+                        "title": song['name'],
+                        "artist": ', '.join([artist['name'] for artist in song['artists']]),
+                        "lyrics": merged
+                    })
+
+    return results
+# Example usage:
+# merged_lyrics = get_aligned_lyrics("Song Title", "Artist Name", "Album Name", 240)
 @app.route('/lyrics', methods=['GET'])
 def lyrics():
     title = request.args.get('title')
     artist = request.args.get('artist')
     album = request.args.get('album')
     duration = request.args.get('duration', type=float, default=0)
-    
-    if not title or not artist:
-        response = "Title and artist are required"
-        return Response(response, status=400, mimetype='text/plain')
-    
-    # Check local files first
+
     local_lyrics = check_local_lyrics(title)
     if local_lyrics:
-        return Response(local_lyrics, mimetype='text/plain')
+        response = Response(local_lyrics, mimetype='text/plain')
+        response.headers['Content-Type'] = 'application/json'
+        return response
 
-    aligned_lyrics = get_aligned_lyrics_with_artist(title, artist, album, duration)
-    if not aligned_lyrics:
-        print("search with artist fail!!")
-        print("fall back to album!!!")
-        aligned_lyrics = get_aligned_lyrics_with_album(title, artist, album, duration)
-    
+    aligned_lyrics = get_aligned_lyrics(title, artist, album, duration)
     if aligned_lyrics:
-        return Response(aligned_lyrics, mimetype='text/plain')
+        response = jsonify(aligned_lyrics)
+        response.headers['Content-Type'] = 'application/json'
+        return response
     else:
-        print("all attempt fail...")
-        response = "No lyrics found"
-        return Response(response, status=404, mimetype='text/plain')
+        response = Response('', status=404)
+        response.headers['Content-Type'] = 'application/json'
+        return response
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 51232))
