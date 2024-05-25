@@ -1,6 +1,7 @@
 from flask import Flask, request, Response
 import requests
 import re
+import os
 
 app = Flask(__name__)
 
@@ -21,35 +22,6 @@ def download_lyrics(song_id):
     lrc = data.get('lrc', {}).get('lyric', '')
     tlyric = data.get('tlyric', {}).get('lyric', '')
     return lrc, tlyric
-
-def parse_lyrics(lyrics):
-    lyrics_dict = {}
-    unformatted_lines = []  # List to store lines that do not match the pattern
-    # Update pattern to match all three formats
-    pattern = re.compile(r'\[(\d{2}):(\d{2})([.:]\d{2,3})?\](.*)')
-    for line in lyrics.split('\n'):
-        match = pattern.match(line)
-        if match:
-            minute, second, millisecond, lyric = match.groups()
-            # Normalize time stamp format
-            millisecond = millisecond if millisecond else '.000'  # Default to '.000' if millisecond part is missing
-            millisecond = millisecond.replace(':', '.')  # Replace ':' with '.' if needed
-            time_stamp = f"[{minute}:{second}{millisecond}]"
-            lyrics_dict[time_stamp] = lyric
-        else:
-            unformatted_lines.append(line)  # Collect lines that do not match
-    return lyrics_dict, unformatted_lines
-
-def merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines):
-    merged_lyrics = unformatted_lines  # Start with unformatted lines
-    all_time_stamps = sorted(set(lrc_dict.keys()).union(tlyric_dict.keys()))
-    for time_stamp in all_time_stamps:
-        original_line = lrc_dict.get(time_stamp, '')
-        translated_line = tlyric_dict.get(time_stamp, '')
-        merged_lyrics.append(f"{time_stamp} {original_line}")
-        if translated_line:
-            merged_lyrics.append(f"{time_stamp} {translated_line}")
-    return '\n'.join(merged_lyrics)
 
 def attempt_to_download_lyrics_from_songs(songs):
     print("Starting to attempt to download lyrics for songs list:")
@@ -75,6 +47,40 @@ def attempt_to_download_lyrics_from_songs(songs):
     print("No suitable lyrics found for any songs in the list.")
     return None, None
 
+def parse_lyrics(lyrics):
+    lyrics_dict = {}
+    unformatted_lines = []
+    pattern = re.compile(r'\[(\d{2}):(\d{2})([.:]\d{2,3})?\](.*)')
+    for line in lyrics.split('\n'):
+        match = pattern.match(line)
+        if match:
+            minute, second, millisecond, lyric = match.groups()
+            millisecond = millisecond if millisecond else '.000'
+            millisecond = millisecond.replace(':', '.')
+            time_stamp = f"[{minute}:{second}{millisecond}]"
+            lyrics_dict[time_stamp] = lyric
+        else:
+            unformatted_lines.append(line)
+    return lyrics_dict, unformatted_lines
+
+def merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines):
+    merged_lyrics = unformatted_lines
+    all_time_stamps = sorted(set(lrc_dict.keys()).union(tlyric_dict.keys()))
+    for time_stamp in all_time_stamps:
+        original_line = lrc_dict.get(time_stamp, '')
+        translated_line = tlyric_dict.get(time_stamp, '')
+        merged_lyrics.append(f"{time_stamp} {original_line}")
+        if translated_line:
+            merged_lyrics.append(f"{time_stamp} {translated_line}")
+    return '\n'.join(merged_lyrics)
+
+def check_local_lyrics(title):
+    lrc_directory = "/path/to/lrcs"
+    for file in os.listdir(lrc_directory):
+        if file.startswith(title) and file.endswith('.lrc'):
+            with open(os.path.join(lrc_directory, file), 'r', encoding='utf-8') as f:
+                return f.read()
+    return None
 def get_aligned_lyrics_with_artist(title, artist, album, duration):
     keyword = f"{artist} - {title}"
     search_result = search_song(keyword)
@@ -140,11 +146,16 @@ def lyrics():
         response = "Title and artist are required"
         return Response(response, status=400, mimetype='text/plain')
     
-    aligned_lyrics = get_aligned_lyrics_with_artist(title, artist, album, duration) # first search with {artist} - {track} for accuracy
+    # Check local files first
+    local_lyrics = check_local_lyrics(title)
+    if local_lyrics:
+        return Response(local_lyrics, mimetype='text/plain')
+
+    aligned_lyrics = get_aligned_lyrics_with_artist(title, artist, album, duration)
     if not aligned_lyrics:
         print("search with artist fail!!")
         print("fall back to album!!!")
-        aligned_lyrics = get_aligned_lyrics_with_album(title, artist, album, duration) # sometimes artist name may vary, try album name 
+        aligned_lyrics = get_aligned_lyrics_with_album(title, artist, album, duration)
     
     if aligned_lyrics:
         return Response(aligned_lyrics, mimetype='text/plain')
@@ -154,6 +165,5 @@ def lyrics():
         return Response(response, status=404, mimetype='text/plain')
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 51232))
     app.run(host='0.0.0.0', port=port)
