@@ -114,8 +114,7 @@ def get_aligned_lyrics(title, artist, album, duration):
                     })
 
     return results
-# Example usage:
-# merged_lyrics = get_aligned_lyrics("Song Title", "Artist Name", "Album Name", 240)
+
 @app.route('/lyrics', methods=['GET'])
 def lyrics():
     title = request.args.get('title')
