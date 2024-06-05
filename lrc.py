@@ -2,8 +2,11 @@ from flask import Flask, request, Response, jsonify
 import requests
 import re
 import os
+from difflib import SequenceMatcher
 
 app = Flask(__name__)
+
+LRC_DIRECTORY = os.environ.get('LRC_DIRECTORY', '/default/path/to/lrcs')
 
 def search_song(keyword):
     api_url = f"https://music.163.com/api/search/get?s={keyword}&type=1&limit=50"
@@ -74,12 +77,14 @@ def merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines):
     return '\n'.join(merged_lyrics)
 
 def check_local_lyrics(title):
-    lrc_directory = "/path/to/lrcs"
-    for file in os.listdir(lrc_directory):
+    for file in os.listdir(LRC_DIRECTORY):
         if file.startswith(title) and file.endswith('.lrc'):
-            with open(os.path.join(lrc_directory, file), 'r', encoding='utf-8') as f:
+            with open(os.path.join(LRC_DIRECTORY, file), 'r', encoding='utf-8') as f:
                 return f.read()
     return None
+
+def get_similarity(a, b):
+    return SequenceMatcher(None, a, b).ratio()
 
 def get_aligned_lyrics(title, artist, album, duration):
     search_keywords = [
@@ -106,13 +111,20 @@ def get_aligned_lyrics(title, artist, album, duration):
                 if len(lrc_dict) >= 5:
                     tlyric_dict, _ = parse_lyrics(trans_lyrics_content if trans_lyrics_content else '')
                     merged = merge_lyrics(lrc_dict, tlyric_dict, unformatted_lines)
+                    similarity = (
+                        get_similarity(title, song['name']) +
+                        get_similarity(artist, ', '.join([artist['name'] for artist in song['artists']])) +
+                        get_similarity(album, song.get('album', {}).get('name', ''))
+                    ) / 3
                     results.append({
                         "id": str(song['id']),
                         "title": song['name'],
                         "artist": ', '.join([artist['name'] for artist in song['artists']]),
-                        "lyrics": merged
+                        "lyrics": merged,
+                        "similarity": similarity
                     })
 
+    results.sort(key=lambda x: x['similarity'], reverse=True)
     return results
 
 @app.route('/lyrics', methods=['GET'])
