@@ -121,6 +121,29 @@ def lyrics():
         response.headers['Content-Type'] = 'application/json'
         return response
 
+@app.route('/lyrics/confirm', methods=['POST'])
+def confirm_lyrics():
+    data = request.get_json()
+    path = data.get('path')
+    lyrics = data.get('lyrics')
+    
+    if not path or not lyrics:
+        response = Response('{"message": "Invalid request data"}', status=400, mimetype='application/json')
+        return response
+
+    lrc_path = re.sub(r'\.\w+$', '.lrc', path)
+
+    try:
+        with open(lrc_path, 'w', encoding='utf-8') as f:
+            f.write(lyrics)
+        response = Response('{"message": "Lyrics saved successfully"}', status=200, mimetype='application/json')
+        return response
+    except Exception as e:
+        print(f"Error saving lyrics to {lrc_path}: {e}")
+        response = Response(f'{{"message": "Error saving lyrics: {e}"}}', status=500, mimetype='application/json')
+        return response
+
+
 if __name__ == '__main__':
     # 端口号现在从环境变量 PORT 中获取，如果没有设置，默认为 51232
     port = int(os.environ.get("PORT", 51232))
