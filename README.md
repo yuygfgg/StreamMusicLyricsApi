@@ -8,6 +8,7 @@ Stream music lyrics api from Netease Music with translation support.
 1. change lrc path in lrc.py to your .lrc file path
 2. run the python script
 3. set lyrics api in Stream music ```http://localhost:51232/lyrics```
+4. set lyrics confirm api ```http://localhost:51232/lyrics/confirm```
 
 <img width="1289" alt="截屏2024-05-17 20 56 10" src="https://github.com/yuygfgg/StreamMusicLyricsApi/assets/140488233/e4394e83-1678-4bba-928d-29100097bcc1">
 
