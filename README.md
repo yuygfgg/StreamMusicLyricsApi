@@ -2,7 +2,7 @@
 Stream music lyrics api from Netease Music with translation support.
 
 - lrc.py returns at most 9 lyrics when searching online, sorted by similarity of title, album name, artist name, in json format.
-- lrc_single.py returns the highest similarity one in plain text.
+- lrc_single.py returns the highest similarity one in plain text, **without translation**.
 
 # usage
 1. change lrc path in lrc.py to your .lrc file path
